@@ -1,0 +1,114 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(psych)
+library(car)
+```
+```{r include = FALSE}
+redwine <- read.csv("winequality-red.csv")
+whitewine <- read.csv("winequality-white.csv")
+
+# 1 = red, 0 = white. Combined datasets.
+df <- rbind(redwine, whitewine)
+
+# Square transform variables
+df$square.pH <- sqrt(df$pH)
+df$square.sulphates <- sqrt(df$sulphates)
+df$square.chlorides <- sqrt(df$chlorides)
+df$square.volatile.acidity <- sqrt(df$volatile.acidity)
+df$square.total.sulfur.dioxide <- sqrt(df$total.sulfur.dioxide)
+df$square.density <- sqrt(df$density)
+
+# Logistic regression model 
+model <- glm(winetype ~ square.pH + square.sulphates + square.chlorides +
+               square.volatile.acidity + square.total.sulfur.dioxide +
+               square.density, data = df, family = "binomial")
+
+df$log.pH.int <- log(df$square.pH)*df$square.pH
+df$log.sulphates.int <- log(df$square.sulphates)*df$square.sulphates
+df$log.chlorides.int <- log(df$square.chlorides)*df$square.chlorides
+df$log.volatile.acidity.int <- log(df$square.volatile.acidity)*df$square.volatile.acidity
+df$log.total.sulfur.dioxide.int <- log(df$square.total.sulfur.dioxide)*df$square.total.sulfur.dioxide
+df$log.density.int <- log(df$square.density)*df$square.density
+
+linearity <- glm(winetype ~ square.pH + square.sulphates + square.chlorides +
+                   square.volatile.acidity + square.total.sulfur.dioxide + square.density +
+                   log.pH.int + log.sulphates.int + log.chlorides.int + log.volatile.acidity.int + 
+                   log.total.sulfur.dioxide.int + log.density.int, data = df, family = binomial())
+
+table1 <- data.frame(Variable = c("Intercept","squareroot.pH","squareroot.sulphates","squareroot.chlorides","squareroot.volatile.acidity","squareroot.total.sulfur.dioxide","squareroot.density"),
+                     pvalue = c("< .001","< .001","< .001","< .001","< .001","< .001","< .001"))
+
+model2 <- glm(winetype ~ pH + sulphates + chlorides +
+                volatile.acidity + total.sulfur.dioxide + density, data = df, family = "binomial")
+
+table2 <- data.frame(Variable = c("log.pH.int","log.sulphates.int","log.chlorides.int","log.volatile.acidity.int","log.total.sulfur.dioxide.int","log.density.int"),
+                     Coefficient = c(-177.38,-11.68,-76.04,-9.03,11.78,-175042.27),
+                     Pvalue = c(".22",".36","< .001",".30",".75",".24"))
+
+table3 <- data.frame(VIF = vif(model))
+table3$Reciprocal.VIF <- data.frame(1/vif(model))[,1]
+ 
+```
+
+
+**Individual Assignment 5, Dion Chang - 20812576**
+
+**1) Problem statement and data used:** The red and white wine data sets were combined in order to build a logistic regression model that predicts whether a wine is red or white. The data set has 1599 observations for red wine and 4898 observations for white wine, making a total of 6497 observations. The features used in the model are pH, sulphates, chlorides, volatile acidity, total sulfur dioxide, and density. 
+
+**2) Planning:** For the data wrangling and cleaning, a new column called "winetype" was added for both red and white wine data sets. It was a binary variable where 1 was for red wine while 0 was for white. The data sets were then combined to make one large data frame to work with. Since the assumption of linearity of the logit was initially not met, a square root transformation on the selected predictor variables was performed. 
+
+After the logistic regression model is built, the model will be interpreted by looking for significant predictors as well as deviance statistics. The odd ratios for the predictors in the model will also be determined. Furthermore, the assumptions of logistic regression will also be tested. The following three are to be diagnosed: linearity of the logit, independence of errors using the Durbin-Watson test, and multicollinearity using VIF statistics. 
+
+**3) Analysis:** 
+
+**Model:** From the summary of the logistic regression model performed in R, the value of the deviance for the "null" model (only the constant in the model) was determined to be 7250.98. However, when the square-root transformed features: pH, sulphates, chlorides, volatile acidity, total sulfur dioxide, and density was included, the deviance value was reduced to 610.45. The model chi-square statistic was determined to be **6640.53** by calculating the difference between the residual and null deviance. This reduction meant that the model with the features added was much better at predicting whether a wine is red or white than the "null" model. The degrees of freedom is 6, reflecting the number of variables in the model. This information was used to determine the probability associated with the chi-square statistic (p < .001); since the probability was less than .05, this further shows that the model fits the data significantly.
+
+Table 1 shows that all the variables are significant predictors for the type of wine at the 5% level of significance. Since the data was transformed, the it would be difficult to interpret the coefficients and therefore they were omitted form this report. Since logistic regression has similar assumptions as linear regression, the following from Pek et al.(2017) applies: "While the square root transformation can be said to stabilize the variance of the residuals and remove nonlinearity in effects, applying the linear regression to the transformed data results in virtually uninterpretable regression coefficients in the square root scale" (p. 8). Although the transformation could be reversed, it would give large coefficient values and therefore not recommended. As Pek et al. (2017) stated:
+
+\setlength{\leftskip}{2cm}
+Because such transformed data are on a different scale compared to the original data (e.g., natural log of reaction time instead of reaction time), the nature of the effect as operationalized by the original variable and its interpretation    changes due to the transformation. To address this complication in interpretation, several authors and textbooks have recommended reverse transformations after conducting inference on the transformed variables. However, inferential results (i.e., NHSTs and CIs) associated with the simple reverse transformation does not necessarily map back onto the original effect of interest, and we strongly discourage the use of reverse transformations. (p. 4)
+
+\setlength{\leftskip}{0pt}
+
+
+```{r echo=F, message=FALSE, warning=FALSE}
+knitr::kable(table1,caption = "p-value of the variables after square-root transformation.")
+```
+Note: R^2^ = .92 (Hosmer-Lemeshow)
+
+**Linearity of of the logit testing:** In order to test this assumption, the logistic regression must include the interaction between each predictor and the log of the same predictor. Therefore, interaction terms of each feature was created by multiplying the log of a variable by the same original variable. For example in Table 2, the interaction of pH is equal to the log value of pH multiplied by the original value of pH:
+
+```{r echo=F}
+knitr::kable(table2,caption = "Output of the linearity of the logit assumption test.")
+```
+
+Table 2 shows that since all interactions except for chlorides have significant values, this indicates that the assumption of linearity of the logit has been 
+met for pH, sulphates, volatile acidity, total sulfur dioxide, and density.
+
+**Multicollinearity:** Table 3 gives the VIF and tolerance (1/VIF) values for the predictors in the logistic regression model. As shown, there is no concern for collinearity as the VIFs are way below 10 and the tolerances are much greater than 0.2. The average VIF was determined to be 1.26, close to 1 which is good.  
+
+```{r echo=FALSE}
+knitr::kable(table3,caption="VIF and tolerance for multicollinearity testing.")
+```
+
+**Independence of errors:** The Durbin-Watson test determined that the d value was close to 2 (1.50), which means that there was no autocorrelation detected.
+
+**Conclusion:** A logistic regression model predicting if the wine is red or white was built from pH, sulphates, chlorides, volatile acidity, total sulfur dioxide, and density. Assumptions of the model were all met, except for chloride with the linearity of the logit test. This means that we would be able to generalize our findings beyond just this data set sample with pH, sulphates, volatile acidity, total sulfur dioxide, and density. Since the data underwent a square-root transformation, the coefficients cannot be interpreted directly as its values have been inflated dramatically. In other words, the odds ratio are very large. Overall, the data fits the model very well as proven by the Hosmer-Lemeshow test which is a test for the goodness of fit for logistic regression. This proves that the logistic regression model built predicts the outcome variable (red or white wine) really well.
+
+\newpage
+
+**References**
+
+Field, A., Miles, J., &; Field Zoe. (2014). Discovering statistics using R. SAGE Publ. 
+
+
+Pek, J.; Wong, O.; and Wong, A. C. (2017) "Data Transformations for Inference with Linear Regression:
+Clarifications and Recommendations," Practical Assessment, Research, and Evaluation: Vol. 22 , Article 9.
+DOI: https://doi.org/10.7275/p86s-zc41. https://scholarworks.umass.edu/pare/vol22/iss1/9
